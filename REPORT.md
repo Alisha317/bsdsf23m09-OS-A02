@@ -82,6 +82,20 @@ The drawback is memory and time. Memory use grows with the number of entries (th
 The arguments are `const void *` because `qsort()` must work with any element type, and a `void *` can point to anything. The `const` promises that the comparison will not modify the elements. Inside the function the pointers must be cast back to the real type. In my program the array elements are strings (`char *`), and `qsort()` passes the address of each element, so the arguments really point to a `char *`. I cast each argument to `const char * const *`, dereference it to get the string, and return `strcmp(s1, s2)`, which already returns a negative, zero or positive value.
 
 ---
+## Feature 6: ls-v1.5.0 - Colorized Output
+
+**Q1. How do ANSI escape codes work for terminal colors? Show the specific sequence for printing text in green.**
+
+ANSI escape codes are special byte sequences that are written to the terminal like normal text, but the terminal does not display them; it interprets them as commands. A sequence starts with the ESC character (ASCII 27, written `\033` in octal in C), followed by `[`, then one or more numeric codes separated by `;`, and ends with the letter `m` (the "select graphic rendition" command): `ESC [ <code> m`. Codes 30-37 set the text color (31 red, 32 green, 34 blue, 35 magenta/pink), 1 means bold and 7 means reverse video (swap foreground and background). The color stays active until it is changed, so the program must print the reset sequence `\033[0m` after the file name; otherwise all the following text would also be coloured.
+
+To print text in green: `printf("\033[0;32m%s\033[0m", name);` The part `\033[0;32m` switches to the normal (not bold) style with green text, `%s` is the file name, and `\033[0m` resets the terminal back to the default color. The escape characters take no space on the screen, but they are counted by `printf` width formats such as `%-10s`, so in my code the padding is calculated from the real name length and printed separately to keep the columns aligned.
+
+**Q2. To color an executable file differently, you need to check its permission bits. Explain which bits in the `st_mode` field you need to check and how.**
+
+The `st_mode` field returned by `lstat()` contains the file type in its upper bits and the permission bits in its lower 9 bits (owner, group, others, each with read, write and execute). To know whether a file is executable I test the three execute bits using the macros `S_IXUSR` (owner execute, 0100), `S_IXGRP` (group execute, 0010) and `S_IXOTH` (others execute, 0001), combined with the bitwise AND operator: `if (st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))`. The expression is non-zero if at least one of the three execute bits is set, and the file is then printed in green. This is checked only after the file has been identified as an ordinary file (the type is tested first with macros like `S_ISDIR` and `S_ISLNK`, which compare the type bits with `S_IFMT`), because directories also have execute bits (search permission) but must be shown in blue.
+
+---
+
 ## Feature 7: ls-v1.6.0 - Recursive Listing (-R)
 
 **Q1. In a recursive function, what is a "base case"? Identify the base case in your recursive `ls` implementation.**
