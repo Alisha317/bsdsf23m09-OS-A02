@@ -82,3 +82,18 @@ The drawback is memory and time. Memory use grows with the number of entries (th
 The arguments are `const void *` because `qsort()` must work with any element type, and a `void *` can point to anything. The `const` promises that the comparison will not modify the elements. Inside the function the pointers must be cast back to the real type. In my program the array elements are strings (`char *`), and `qsort()` passes the address of each element, so the arguments really point to a `char *`. I cast each argument to `const char * const *`, dereference it to get the string, and return `strcmp(s1, s2)`, which already returns a negative, zero or positive value.
 
 ---
+## Feature 7: ls-v1.6.0 - Recursive Listing (-R)
+
+**Q1. In a recursive function, what is a "base case"? Identify the base case in your recursive `ls` implementation.**
+
+A base case is the condition under which a recursive function stops calling itself and returns directly. Without it the function would call itself forever, and the program would crash with a stack overflow. Every recursive call must move closer to the base case.
+
+In my `do_ls()` the recursion happens inside a loop over the entries of the current directory: for every entry that is a directory, `do_ls()` is called again for it. The base case is a directory that contains no sub-directories (for example a directory with only ordinary files, or an empty directory, or one that cannot be opened). In such a directory the loop does not find any entry for which `S_ISDIR()` is true, so no further recursive call is made, the function prints its entries, frees its memory and returns to the caller. Each recursive call works on a sub-directory, which is one level deeper in the directory tree, and a tree is finite, so the recursion always reaches the base case. The entries `.` and `..` are explicitly skipped, and symbolic links are not followed (`lstat` is used), because otherwise the recursion could go in circles and never end.
+
+**Q2. Explain why it is essential to construct a full path (e.g., "parent_dir/subdir") before making a recursive call. What would happen if you simply tried to call `do_ls()` with just the sub-directory name?**
+
+`readdir()` returns only the name of an entry (for example `src`), not its location. System calls such as `opendir()` and `lstat()` interpret a relative name starting from the current working directory of the program, not from the directory that is being listed. So after listing `/home/me/project`, calling `do_ls("src")` would look for `./src` in the directory from which the program was started. If it does not exist, the program prints "Cannot open directory", and if a different directory with the same name exists there, the program would list the wrong directory without any error. The `lstat()` calls used for the long listing and for the colors would also fail or give wrong information for the same reason.
+
+Therefore, before every recursive call I build the full path by joining the parent directory, a `/` and the entry name (`build_path()` gives `/home/me/project/src`), and I pass this path to `do_ls()`. The same path is used to check with `lstat()` whether the entry is a directory, and it is printed as the header of the sub-directory (`/home/me/project/src:`), so the user can see which directory is listed. Deeper levels simply extend the path further (`.../src/lib`), so every call always has an exact location.
+
+---
