@@ -52,3 +52,18 @@ With a fixed width of 80:
 The fixed value of 80 is only used as a fallback when `ioctl` fails, for example when the output is redirected to a file or a pipe and there is no terminal.
 
 ---
+## Feature 4: ls-v1.3.0 - Horizontal Column Display (-x)
+
+**Q1. Compare the implementation complexity of the "down then across" (vertical) printing logic versus the "across" (horizontal) printing logic. Which one requires more pre-calculation and why?**
+
+The horizontal ("across") logic is simpler. It only needs the terminal width, the column width (`longest name + 2`) and a running counter of how many characters are already used on the current line. The names are printed in array order, left to right, and a newline is printed when the next column would not fit. It uses a single loop, and no index arithmetic or knowledge of the total number of rows is needed.
+
+The vertical ("down then across") logic needs more pre-calculation. Before printing anything, the program must calculate the number of columns (`width / column width`) and then the number of rows (`ceil(count / columns)`), because the position of every name depends on the total count of names. The printing needs two nested loops and the index formula `names[r + c * rows]`, and it has to handle the last column, which may be incomplete (index >= count), and pad only when another name follows in the row. So the vertical layout requires more pre-calculation, because a name's place is only known after the number of rows is known.
+
+**Q2. Describe the strategy you used in your code to manage the different display modes (-l, -x, and default). How did your program decide which function to call for printing?**
+
+I used an enumeration `enum display_mode { MODE_DEFAULT, MODE_LONG, MODE_HORIZONTAL }` and one variable `mode` in `main()`, initialised to `MODE_DEFAULT`. The `getopt()` loop (option string `"lx"`) sets `mode = MODE_LONG` for `-l` and `mode = MODE_HORIZONTAL` for `-x`; if both are given, the last one wins. The chosen mode is passed to `do_ls(dir, mode)`.
+
+Inside `do_ls()` all file names are first read into a dynamic array. Then the mode is checked with an if / else-if / else chain: `MODE_LONG` calls `compute_widths()` and `print_long()` for every entry, `MODE_HORIZONTAL` calls `print_horizontal()`, and anything else (the default) calls `print_columns()` (down then across). Because the mode is a single variable and the reading of names is shared, a new display mode only needs a new enum value, a new option in `getopt()` and a new print function.
+
+---
