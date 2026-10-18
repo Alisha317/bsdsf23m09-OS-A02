@@ -67,3 +67,18 @@ I used an enumeration `enum display_mode { MODE_DEFAULT, MODE_LONG, MODE_HORIZON
 Inside `do_ls()` all file names are first read into a dynamic array. Then the mode is checked with an if / else-if / else chain: `MODE_LONG` calls `compute_widths()` and `print_long()` for every entry, `MODE_HORIZONTAL` calls `print_horizontal()`, and anything else (the default) calls `print_columns()` (down then across). Because the mode is a single variable and the reading of names is shared, a new display mode only needs a new enum value, a new option in `getopt()` and a new print function.
 
 ---
+## Feature 5: ls-v1.4.0 - Alphabetical Sort
+
+**Q1. Why is it necessary to read all directory entries into memory before sorting? What are the potential drawbacks of this approach for directories containing millions of files?**
+
+`readdir()` returns the entries in the order in which the file system stores them, which is not alphabetical, and it can only be read once from start to end. A sort needs to compare any entry with any other entry, so the smallest name could be the very last one returned. Therefore the program cannot print a name until it has seen all of them. For this reason all the names are first stored in a dynamic array (`malloc`/`realloc`), then sorted with `qsort()`, and only then displayed. The same array is also needed to find the longest name for the column layout.
+
+The drawback is memory and time. Memory use grows with the number of entries (the array of pointers plus a copy of every name made with `strdup`), so a directory with millions of files may need hundreds of megabytes and the program can become slow or even fail if `malloc` returns NULL. Nothing can be printed until reading and sorting are finished, so the user waits and sees no output at first. Sorting also costs O(n log n) time. A real `ls` has the same limitation when sorting; an unsorted listing (like `ls -f`) can print every entry immediately while reading, using constant memory.
+
+**Q2. Explain the purpose of the comparison function required by `qsort()`. How does it work, and why does it take `const void *` arguments?**
+
+`qsort()` is a generic function: it can sort an array of any type, but it does not know how to compare two elements. The comparison function is supplied by the programmer and tells `qsort()` the order of two elements. It must return a negative value if the first element should come before the second, zero if they are equal, and a positive value if the first should come after the second. `qsort()` calls it many times while sorting.
+
+The arguments are `const void *` because `qsort()` must work with any element type, and a `void *` can point to anything. The `const` promises that the comparison will not modify the elements. Inside the function the pointers must be cast back to the real type. In my program the array elements are strings (`char *`), and `qsort()` passes the address of each element, so the arguments really point to a `char *`. I cast each argument to `const char * const *`, dereference it to get the string, and return `strcmp(s1, s2)`, which already returns a negative, zero or positive value.
+
+---
